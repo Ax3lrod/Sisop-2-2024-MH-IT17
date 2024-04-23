@@ -238,6 +238,583 @@ Setelah program dijalankan, dapat dilihat bahwa isi semua file .txt di dalam fol
 
 ## NOMOR 2
 
+Paul adalah seorang mahasiswa semester 4 yang diterima magang di perusahaan XYZ. Pada hari pertama magang, ia diberi tugas oleh atasannya untuk membuat program manajemen file sederhana. Karena kurang terbiasa dengan bahasa C dan environment Linux, ia meminta bantuan kalian untuk mengembangkan program tersebut.
+Atasannya meminta agar program tersebut dapat berjalan secara daemon dan dapat mengunduh serta melakukan unzip terhadap file berikut. Atasannya juga meminta program ini dibuat tanpa menggunakan command system()
+
+Setelah ditelusuri, ternyata hanya 6 file teratas yang nama filenya tidak dienkripsi. Oleh karena itu, bantulah Paul untuk melakukan dekripsi terhadap nama file ke-7 hingga terakhir menggunakan algoritma ROT19
+
+Setelah dekripsi selesai, akan terlihat bahwa setiap file memuat salah satu dari kode berikut: r3N4mE, d3Let3, dan m0V3. Untuk setiap file dengan nama yang memuat kode d3Let3, hapus file tersebut. Sementara itu, untuk setiap file dengan nama yang memuat kode r3N4mE, lakukan hal berikut:
+Jika ekstensi file adalah “.ts”, rename filenya menjadi “helper.ts”
+Jika ekstensi file adalah “.py”, rename filenya menjadi “calculator.py”
+Jika ekstensi file adalah “.go”, rename filenya menjadi “server.go”
+Jika file tidak memuat salah satu dari ekstensi diatas, rename filenya menjadi “renamed.file”
+
+Atasan Paul juga meminta agar program ini dapat membackup dan merestore file. Oleh karena itu, bantulah Paul untuk membuat program ini menjadi 3 mode, yaitu:
+default: program berjalan seperti biasa untuk me-rename dan menghapus file. Mode ini dieksekusi ketika program dijalankan tanpa argumen tambahan, yaitu dengan command ./management saja
+backup: program memindahkan file dengan kode m0V3 ke sebuah folder bernama “backup”
+restore: program mengembalikan file dengan kode m0V3 ke folder sebelum file tersebut dipindahkan
+Contoh penggunaan: ./management -m backup
+
+Terkadang, Paul perlu mengganti mode dari program ini tanpa menghentikannya terlebih dahulu. Oleh karena itu, bantulan Paul untuk mengintegrasikan kemampuan untuk mengganti mode ini dengan mengirim sinyal ke daemon, dengan ketentuan:
+SIGRTMIN untuk mode default
+SIGUSR1 untuk mode backup
+SIGUSR2 untuk mode restore
+Contoh penggunaan: kill -SIGUSR2 <pid_program>
+
+Program yang telah dibuat ini tidak mungkin akan dijalankan secara terus-menerus karena akan membebani sistem. Maka dari itu, bantulah Paul untuk membuat program ini dapat dimatikan dengan aman dan efisien
+
+Terakhir, program ini harus berjalan setiap detik dan mampu mencatat setiap peristiwa yang terjadi ke dalam file .log yang bernama “history.log” dengan ketentuan:
+Format: [nama_user][HH:MM:SS] - <nama_file> - <action>
+nama_user adalah username yang melakukan action terhadap file
+Format action untuk setiap kode:
+kode r3N4mE: Successfully renamed.
+kode d3Let3: Successfully deleted.
+mode backup: Successfully moved to backup.
+mode restore: Successfully restored from backup.
+Contoh pesan log:
+[paul][00:00:00] - r3N4mE.ts - Successfully renamed.
+[paul][00:00:00] - m0V3.xk1 - Successfully restored from backup.
+
+Berikut adalah struktur folder untuk pengerjaan nomor 2:
+    soal_2/
+    ├── history.log
+    ├── management.c
+    └── library/
+        └── backup/
+
+**Solusi**
+**Oleh Aryasatya Alaauddin**
+
+```
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <syslog.h>
+#include <string.h>
+#include <dirent.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <signal.h>
+#include <ctype.h>
+
+#define LOG_FILE "../history.log" // Change path to outside library folder
+#define BACKUP_DIR "../library/backup" // Change path to outside library folder
+#define FILE_URL "https://drive.google.com/uc?export=download&id=1rUIZmp10lXLtCIH3LAZJzRPeRks3Crup"
+#define FILE_NAME "../library.zip" // Change path to outside library folder
+
+#define MAX_FILENAME_LEN 256
+#define MAX_HISTORY_LEN 512 // Increased buffer size for log entries
+
+// Deklarasi fungsi
+void downloadAndUnzipFile(); // Function declaration for downloading and unzipping a file
+void decryptFileName(char *filename); // Function declaration for decrypting a file name
+void manageFiles(); // Function declaration for managing files in the library directory
+void backupFiles(); // Function declaration for backing up files
+void restoreFiles(); // Function declaration for restoring files from backup
+void signalHandler(int signum); // Signal handler function declaration
+void logAction(const char *filename, const char *action); // Function declaration for logging actions
+void download_and_extract_file(); // Function declaration for downloading and extracting a file
+void renameDecryptedFiles(char *filename); // Function declaration for renaming decrypted files
+void deleteDecryptedFiles(char *filename); // Function declaration for deleting decrypted files
+
+```
+Pertama-tama, kode memuat beberapa pustaka standar yang diperlukan untuk operasi sistem, manipulasi string, manajemen file, dan sebagainya. Selanjutnya, makro konstanta digunakan untuk menentukan path file, URL file, dan ukuran maksimum untuk nama file dan entri log. Setelah itu, fungsi-fungsi deklarasi disediakan untuk mendefinisikan perilaku fungsi-fungsi yang akan digunakan dalam program. Kemudian, variabel global mode dideklarasikan untuk menentukan mode operasi program, dengan nilai 0 sebagai default, 1 untuk operasi backup, dan 2 untuk operasi restore. Ada juga sebuah fungsi yang melakukan enkripsi ROT19 pada karakter yang diberikan, yang nantinya akan digunakan untuk mendekripsi nama file. Fungsi main adalah titik masuk utama program yang melakukan demonisasi, mengatur penangan sinyal, dan menentukan mode operasi program berdasarkan argumen yang diberikan. Ada juga fungsi untuk mendownload dan mengekstrak file, serta fungsi-fungsi untuk mengelola file dalam direktori, seperti mendekripsi nama file, membuat backup file, dan mengembalikan file dari backup. Terakhir, ada sebuah fungsi untuk mencatat tindakan yang dilakukan pada file ke dalam log, yang mencatat nama file, tindakan yang diambil, dan timestamp.
+
+```
+// Variabel global
+int mode = 0; // 0: default, 1: backup, 2: restore
+
+// Function to perform ROT19 encryption
+char rot19(char c) {
+    if (isalpha(c)) {
+        char base = islower(c) ? 'a' : 'A';
+        return (c - base + 7) % 26 + base;
+    }
+    return c;
+}
+
+```
+Variabel global mode digunakan untuk menentukan mode operasi program secara keseluruhan, dengan nilai 0 sebagai mode default, 1 sebagai mode backup, dan 2 sebagai mode restore. Ini memungkinkan program untuk beroperasi sesuai dengan tujuan yang diinginkan, seperti membuat cadangan file atau mengembalikan file dari cadangan.
+
+Fungsi rot19 adalah fungsi enkripsi ROT19 yang mengambil satu karakter sebagai input dan mengembalikan karakter yang telah dienkripsi. Saat diberikan karakter alfabet (huruf), fungsi ini akan mengenkripsi karakter tersebut sesuai dengan aturan ROT19, yaitu dengan menggeser karakter sejauh 7 posisi ke kanan dalam alfabet. Fungsi ini memastikan bahwa karakter enkripsi tetap berada dalam rentang alfabet yang benar, baik huruf besar maupun huruf kecil. Jika karakter yang diberikan bukan huruf, fungsi akan mengembalikan karakter tersebut tanpa melakukan enkripsi.
+
+```
+// Function to decrypt a file name using ROT19
+void decryptFileName(char *filename) {
+    char decryptedFilename[MAX_FILENAME_LEN];
+    int i = 0;
+    while (filename[i] != '\0') {
+        decryptedFilename[i] = rot19(filename[i]);
+        i++;
+    }
+    decryptedFilename[i] = '\0';
+
+    // Rename file using the decrypted filename
+    if (rename(filename, decryptedFilename) == 0) {
+        logAction(filename, "Decrypted");
+    } else {
+        perror("Error renaming file");
+    }
+}
+```
+Fungsi decryptFileName bertanggung jawab untuk mendekripsi nama file menggunakan algoritma ROT19 dan kemudian mengganti nama file dengan nama yang sudah didekripsi. Fungsi ini menerima parameter filename, yang merupakan string yang berisi nama file yang akan dideskripsi. Dalam fungsi, sebuah array karakter decryptedFilename dideklarasikan dengan ukuran MAX_FILENAME_LEN untuk menyimpan nama file yang sudah didekripsi. Selanjutnya, sebuah variabel i digunakan sebagai indeks untuk mengakses karakter dalam filename.
+
+Proses dekripsi dilakukan dengan iterasi melalui setiap karakter dalam filename. Setiap karakter diambil dari filename, dan fungsi rot19 dipanggil untuk mengenkripsi karakter tersebut menggunakan algoritma ROT19. Hasil enkripsi kemudian disimpan dalam array decryptedFilename. Iterasi dilakukan sampai karakter nul (\0) yang menandakan akhir dari string filename.
+
+Setelah proses dekripsi selesai, sebuah karakter nul (\0) ditambahkan ke akhir array decryptedFilename untuk menandakan akhir dari string. Selanjutnya, fungsi rename dipanggil untuk mengganti nama file yang asli (filename) dengan nama yang sudah didekripsi (decryptedFilename). Jika proses penggantian nama berhasil, fungsi logAction dipanggil untuk mencatat tindakan dekripsi yang berhasil ke dalam log. Namun, jika terjadi kesalahan dalam proses penggantian nama, fungsi perror akan digunakan untuk mencetak pesan kesalahan yang sesuai.
+```
+// Function to rename decrypted files based on certain criteria
+void renameDecryptedFiles(char *filename) {
+    if (strstr(filename, "r3N4mE") != NULL) { // Check if the filename contains "r3N4mE"
+        char *extension = strrchr(filename, '.'); // Find file extension
+        if (extension == NULL) {
+            // No extension, rename to "renamed.file"
+            if (rename(filename, "renamed.file") == 0) {
+                logAction(filename, "Renamed to renamed.file");
+            } else {
+                perror("Error renaming file");
+            }
+        } else {
+            // Process based on file extension
+            if (strcmp(extension, ".ts") == 0) {
+                if (rename(filename, "helper.ts") == 0) {
+                    logAction(filename, "Renamed to helper.ts");
+                } else {
+                    perror("Error renaming file");
+                }
+            } else if (strcmp(extension, ".py") == 0) {
+                if (rename(filename, "calculator.py") == 0) {
+                    logAction(filename, "Renamed to calculator.py");
+                } else {
+                    perror("Error renaming file");
+                }
+            } else if (strcmp(extension, ".go") == 0) {
+                if (rename(filename, "server.go") == 0) {
+                    logAction(filename, "Renamed to server.go");
+                } else {
+                    perror("Error renaming file");
+                }
+            } else {
+                if (rename(filename, "renamed.file") == 0) {
+                    logAction(filename, "Renamed to renamed.file");
+                } else {
+                    perror("Error renaming file");
+                }
+            }
+        }
+    }
+}
+```
+Fungsi renameDecryptedFiles bertujuan untuk menamai ulang file yang sudah didekripsi berdasarkan kriteria tertentu. Pertama, fungsi memeriksa apakah nama file mengandung string "r3N4mE" dengan menggunakan fungsi strstr. Jika nama file memenuhi kriteria tersebut, fungsi akan melanjutkan proses penamaan ulang.
+
+Selanjutnya, fungsi mencari ekstensi file dengan menggunakan fungsi strrchr. Jika file tidak memiliki ekstensi, fungsi akan menamai ulang file tersebut menjadi "renamed.file". Jika file memiliki ekstensi, fungsi akan memproses penamaan ulang berdasarkan ekstensi file tersebut.
+
+Pemrosesan penamaan ulang dilakukan dengan membandingkan ekstensi file dengan beberapa opsi yang telah ditentukan. Jika ekstensi file cocok dengan salah satu opsi yang ditentukan (misalnya, ".ts", ".py", atau ".go"), fungsi akan menamai ulang file tersebut sesuai dengan opsi yang cocok. Jika tidak ada kecocokan dengan opsi yang ditentukan, file akan dinamai ulang menjadi "renamed.file".
+
+Setiap kali penamaan ulang berhasil dilakukan, fungsi logAction dipanggil untuk mencatat tindakan penamaan ulang yang berhasil ke dalam log. Namun, jika terjadi kesalahan dalam proses penamaan ulang, fungsi perror akan digunakan untuk mencetak pesan kesalahan yang sesuai.
+
+```
+// Function to delete decrypted files based on certain criteria
+void deleteDecryptedFiles(char *filename) {
+    if (strstr(filename, "d3Let3") != NULL) { // Check if the filename contains "d3Let3"
+        if (remove(filename) == 0) {
+            logAction(filename, "Deleted successfully");
+        } else {
+            perror("Error deleting file");
+        }
+    }
+}
+```
+Fungsi deleteDecryptedFiles bertujuan untuk menghapus file yang sudah didekripsi berdasarkan kriteria tertentu. Pertama, fungsi memeriksa apakah nama file mengandung string "d3Let3" dengan menggunakan fungsi strstr. Jika nama file memenuhi kriteria tersebut, fungsi akan melanjutkan proses penghapusan.
+
+Selanjutnya, jika nama file memenuhi kriteria, fungsi akan menggunakan fungsi remove untuk menghapus file tersebut. Jika penghapusan berhasil dilakukan, fungsi logAction dipanggil untuk mencatat bahwa file tersebut berhasil dihapus dalam log.
+
+Namun, jika terjadi kesalahan dalam proses penghapusan file, fungsi perror akan digunakan untuk mencetak pesan kesalahan yang sesuai. Pesan kesalahan tersebut dapat membantu dalam menemukan dan memperbaiki masalah yang mungkin terjadi saat menghapus file.
+```
+// Function to manage files in the library directory
+void manageFiles() {
+    // Change the working directory to the "library" directory
+    if (chdir("library") != 0) {
+        perror("Error changing directory to library");
+        return;
+    }
+
+    // Implement the function to decrypt and process regular files
+    DIR *dir;
+    struct dirent *entry;
+    struct stat fileStat;
+
+    dir = opendir(".");
+    if (dir == NULL) {
+        perror("Error opening directory");
+        return;
+    }
+
+    // Iterate through files in the "library" directory
+    while ((entry = readdir(dir)) != NULL) {
+        char filename[MAX_FILENAME_LEN];
+        snprintf(filename, sizeof(filename), "%s", entry->d_name);
+
+        // Skip "." and ".." entries
+        if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
+            continue;
+
+        // Skip files with number 1 to 6 as the first character in their filenames
+        if (isdigit(filename[0]) && filename[0] >= '1' && filename[0] <= '6')
+            continue;
+
+        // Use lstat() to get information about the file
+        if (lstat(filename, &fileStat) == 0 && S_ISREG(fileStat.st_mode)) {
+            // Decrypt filename
+            decryptFileName(filename);
+            
+            logAction(filename, "is being processed");
+            // Rename and delete decrypted files if necessary
+            renameDecryptedFiles(filename);
+            deleteDecryptedFiles(filename);
+        }
+    }
+
+    closedir(dir);
+
+    // Change back to the main directory after processing files in "library"
+    if (chdir("..") != 0) {
+        perror("Error changing directory back to main directory");
+    }
+}
+```
+
+Fungsi manageFiles bertanggung jawab untuk mengelola file-file dalam direktori "library". Pertama-tama, fungsi mengubah direktori kerja ke direktori "library" menggunakan fungsi chdir. Jika perubahan direktori gagal, fungsi akan mencetak pesan kesalahan menggunakan perror dan kemudian keluar dari fungsi.
+
+Selanjutnya, fungsi membuka direktori "library" menggunakan opendir. Jika pembukaan direktori gagal, fungsi akan mencetak pesan kesalahan dan keluar dari fungsi.
+
+Setelah berhasil membuka direktori, fungsi akan melakukan iterasi melalui setiap entri (file atau subdirektori) dalam direktori "library" menggunakan readdir. Untuk setiap entri, fungsi akan memeriksa apakah nama file adalah "." atau ".." dan melewatkannya jika iya, karena entri tersebut adalah entri direktori yang spesial dan tidak relevan.
+
+Selanjutnya, fungsi akan menggunakan lstat untuk mendapatkan informasi tentang file. Jika file adalah file regular, fungsi akan mendekripsi nama file tersebut menggunakan decryptFileName, mencatat bahwa file sedang diproses dalam log menggunakan logAction, serta memanggil fungsi renameDecryptedFiles dan deleteDecryptedFiles untuk menangani penamaan ulang dan penghapusan file yang sudah didekripsi, jika diperlukan.
+
+Setelah selesai mengelola semua file dalam direktori "library", fungsi akan menutup direktori menggunakan closedir. Kemudian, fungsi akan mengembalikan direktori kerja ke direktori utama setelah selesai memproses file dalam "library". Jika perubahan direktori kembali ke direktori utama gagal, fungsi akan mencetak pesan kesalahan menggunakan perror.
+
+```
+// Function to backup files from the library directory
+void backupFiles() {
+    // Change the working directory to the "library" directory
+    if (chdir("library") != 0) {
+        perror("Error changing directory to library");
+        return;
+    }
+
+    // Implement the function to backup files
+    DIR *dir;
+    struct dirent *entry;
+    struct stat fileStat;
+
+    dir = opendir(".");
+    if (dir == NULL) {
+        perror("Error opening directory");
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        char filename[MAX_FILENAME_LEN];
+        snprintf(filename, sizeof(filename), "%s", entry->d_name);
+
+        // Use lstat() to get information about the file
+        if (lstat(filename, &fileStat) == 0 && S_ISREG(fileStat.st_mode)) {
+            decryptFileName(filename); // Decrypt filename
+
+            if (strstr(filename, "m0V3") != NULL) { // Check if the filename contains "m0V3"
+                char backupPath[MAX_FILENAME_LEN + sizeof(BACKUP_DIR) + 2]; // Increased buffer size
+                snprintf(backupPath, sizeof(backupPath), "%s/%s", BACKUP_DIR, filename);
+                rename(filename, backupPath);
+                logAction(filename, "Successfully moved to backup.");
+            }
+        }
+    }
+
+    closedir(dir);
+
+    // Change back to the main directory after processing files in "library"
+    if (chdir("..") != 0) {
+        perror("Error changing directory back to main directory");
+    }
+}
+```
+Fungsi backupFiles bertujuan untuk mencadangkan file dari direktori "library". Pertama-tama, fungsi mengubah direktori kerja ke direktori "library" menggunakan fungsi chdir. Jika perubahan direktori gagal, fungsi akan mencetak pesan kesalahan menggunakan perror dan kemudian keluar dari fungsi.
+
+Selanjutnya, fungsi membuka direktori "library" menggunakan opendir. Jika pembukaan direktori gagal, fungsi akan mencetak pesan kesalahan dan keluar dari fungsi.
+
+Setelah berhasil membuka direktori, fungsi akan melakukan iterasi melalui setiap entri (file atau subdirektori) dalam direktori "library" menggunakan readdir. Untuk setiap entri, fungsi akan memeriksa apakah itu adalah file regular menggunakan lstat. Jika iya, fungsi akan mendekripsi nama file tersebut menggunakan decryptFileName.
+
+Kemudian, fungsi akan memeriksa apakah nama file mengandung string "m0V3" menggunakan strstr. Jika iya, fungsi akan menyiapkan jalur cadangan untuk file tersebut dengan menggabungkan nama file dengan direktori cadangan menggunakan snprintf. Setelah itu, file akan dipindahkan ke direktori cadangan dengan menggunakan rename.
+
+Setelah selesai mencadangkan semua file yang memenuhi kriteria, fungsi akan menutup direktori menggunakan closedir. Kemudian, fungsi akan mengembalikan direktori kerja ke direktori utama setelah selesai memproses file dalam "library". Jika perubahan direktori kembali ke direktori utama gagal, fungsi akan mencetak pesan kesalahan menggunakan perror.
+
+```
+// Function to restore files from the backup directory
+void restoreFiles() {
+    // Change the working directory to the backup directory
+    if (chdir(BACKUP_DIR) != 0) {
+        perror("Error changing directory to backup directory");
+        return;
+    }
+
+    // Implement the function to restore files
+    DIR *dir;
+    struct dirent *entry;
+    struct stat fileStat;
+
+    dir = opendir(".");
+    if (dir == NULL) {
+        perror("Error opening directory");
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        char filename[MAX_FILENAME_LEN];
+        snprintf(filename, sizeof(filename), "%s", entry->d_name);
+
+        // Use lstat() to get information about the file
+        if (lstat(filename, &fileStat) == 0 && S_ISREG(fileStat.st_mode)) {
+            decryptFileName(filename); // Decrypt filename
+
+            if (strstr(filename, "m0V3") != NULL) { // Check if the filename contains "m0V3"
+                char restorePath[MAX_FILENAME_LEN + 3]; // Increased buffer size
+                snprintf(restorePath, sizeof(restorePath), "../%s", filename);
+                rename(entry->d_name, restorePath);
+                logAction(filename, "Successfully restored from backup.");
+            }
+        }
+    }
+
+    closedir(dir);
+
+    // Change back to the main directory after processing files in "backup" directory
+    if (chdir("..") != 0) {
+        perror("Error changing directory back to main directory");
+    }
+}
+```
+Fungsi restoreFiles bertanggung jawab untuk mengembalikan file dari direktori cadangan ke lokasi asalnya. Pertama-tama, fungsi mengubah direktori kerja ke direktori cadangan menggunakan fungsi chdir. Jika perubahan direktori gagal, fungsi akan mencetak pesan kesalahan menggunakan perror dan kemudian keluar dari fungsi.
+
+Selanjutnya, fungsi membuka direktori cadangan menggunakan opendir. Jika pembukaan direktori gagal, fungsi akan mencetak pesan kesalahan dan keluar dari fungsi.
+
+Setelah berhasil membuka direktori, fungsi akan melakukan iterasi melalui setiap entri (file atau subdirektori) dalam direktori cadangan menggunakan readdir. Untuk setiap entri, fungsi akan memeriksa apakah itu adalah file regular menggunakan lstat. Jika iya, fungsi akan mendekripsi nama file tersebut menggunakan decryptFileName.
+
+Kemudian, fungsi akan memeriksa apakah nama file mengandung string "m0V3" menggunakan strstr. Jika iya, fungsi akan menyiapkan jalur pemulihan untuk file tersebut dengan menggabungkan nama file dengan jalur direktori asal menggunakan snprintf. Setelah itu, file akan dipulihkan ke lokasi asalnya dengan menggunakan rename.
+
+Setelah selesai memulihkan semua file yang memenuhi kriteria, fungsi akan menutup direktori menggunakan closedir. Kemudian, fungsi akan mengembalikan direktori kerja ke direktori utama setelah selesai memproses file dalam direktori cadangan. Jika perubahan direktori kembali ke direktori utama gagal, fungsi akan mencetak pesan kesalahan menggunakan perror.
+
+```
+// Signal handler function
+void signalHandler(int signum) {
+    if (signum == SIGRTMIN) {
+        mode = 0; // Set mode to default
+    } else if (signum == SIGUSR1) {
+        mode = 1; // Set mode to backup
+    } else if (signum == SIGUSR2) {
+        mode = 2; // Set mode to restore
+    }
+}
+```
+
+Fungsi signalHandler adalah fungsi penangan sinyal yang bertujuan untuk menangani sinyal yang diterima oleh proses. Fungsi ini akan dipanggil ketika proses menerima sinyal tertentu yang telah ditentukan sebelumnya.
+
+Pertama, fungsi ini menerima parameter signum, yang merupakan nomor sinyal yang diterima. Fungsi kemudian memeriksa nilai signum untuk menentukan tindakan yang harus diambil sesuai dengan jenis sinyal yang diterima.
+
+* Jika signum sama dengan SIGRTMIN, ini menandakan bahwa proses menerima sinyal real-time minimum. Dalam konteks aplikasi ini, sinyal ini digunakan untuk mengatur mode ke mode default, yang ditandai dengan mode = 0.
+* Jika signum sama dengan SIGUSR1, ini menandakan bahwa proses menerima sinyal pengguna 1. Dalam konteks aplikasi ini, sinyal ini digunakan untuk mengatur mode ke mode cadangan, yang ditandai dengan mode = 1.
+* Jika signum sama dengan SIGUSR2, ini menandakan bahwa proses menerima sinyal pengguna 2. Dalam konteks aplikasi ini, sinyal ini digunakan untuk mengatur mode ke mode pemulihan, yang ditandai dengan mode = 2.
+
+```
+// Function to log actions with filename and action description
+void logAction(const char *filename, const char *action) {
+    FILE *logFile = fopen(LOG_FILE, "a");
+    if (logFile != NULL) {
+        time_t rawtime;
+        struct tm *timeinfo;
+        char timestamp[20];
+        time(&rawtime);
+        timeinfo = localtime(&rawtime);
+        strftime(timestamp, sizeof(timestamp), "%H:%M:%S", timeinfo);
+        char username[64]; // Temporary username as "paul"
+        fprintf(logFile, "[paul][%s] - %s - %s\n", timestamp, filename, action);
+        fclose(logFile);
+    }
+}
+```
+Fungsi logAction bertujuan untuk mencatat tindakan tertentu yang terjadi pada file dalam sebuah log. Fungsi ini menerima dua parameter: filename, yang merupakan nama file yang terlibat dalam tindakan, dan action, yang merupakan deskripsi tindakan yang dilakukan pada file tersebut.
+
+Pertama, fungsi membuka file log untuk ditambahkan ("a") menggunakan fungsi fopen. Jika operasi pembukaan file berhasil, fungsi akan melanjutkan untuk mencatat tindakan dalam file log. Namun, jika pembukaan file gagal, fungsi akan menghentikan proses pencatatan tindakan dan keluar.
+
+Selanjutnya, fungsi mengambil waktu saat ini menggunakan fungsi time, dan kemudian menggunakan fungsi localtime untuk mengonversi waktu tersebut ke dalam format lokal. Informasi waktu ini digunakan untuk membuat timestamp dalam format "HH:MM:SS" menggunakan fungsi strftime, yang kemudian disimpan dalam array timestamp.
+
+Selanjutnya, fungsi mencetak informasi tindakan ke dalam file log menggunakan fungsi fprintf. Informasi ini terdiri dari timestamp, nama pengguna (dalam kasus ini ditetapkan sebagai "paul"), nama file, dan deskripsi tindakan. Setelah pencetakan selesai, file log ditutup menggunakan fclose.
+```
+// Function to download and extract a file
+void download_and_extract_file() {
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Child process
+        execlp("wget", "wget", FILE_URL, "-O", FILE_NAME, "-q", NULL);
+        perror("exec wget");
+        exit(EXIT_FAILURE);
+    } else if (pid > 0) {
+        // Parent process
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            // Download successful
+            pid_t pid_unzip = fork();
+            if (pid_unzip == 0) {
+                execlp("unzip", "unzip", FILE_NAME, NULL);
+                perror("exec unzip");
+                exit(EXIT_FAILURE);
+            } else if (pid_unzip > 0) {
+                int status_unzip;
+                waitpid(pid_unzip, &status_unzip, 0);
+                if (WIFEXITED(status_unzip) && WEXITSTATUS(status_unzip) == 0) {
+                    // Unzip successful
+                } else {
+                    printf("Unzip failed.\n");
+                    exit(EXIT_FAILURE);
+                }
+            } else {
+                perror("fork unzip");
+                exit(EXIT_FAILURE);
+            }
+        } else {
+            printf("Download failed.\n");
+            exit(EXIT_FAILURE);
+        }
+    } else {
+        perror("fork wget");
+        exit(EXIT_FAILURE);
+    }
+}
+```
+
+Fungsi download_and_extract_file bertujuan untuk mengunduh dan mengekstrak sebuah file dari URL yang telah ditentukan sebelumnya. Fungsi ini menggunakan mekanisme proses fork untuk menjalankan perintah wget dan unzip secara asinkron.
+
+Pertama, fungsi membuat proses anak (pid = fork()) untuk menjalankan perintah wget yang bertanggung jawab untuk mengunduh file dari URL yang telah ditentukan. Dalam proses anak, fungsi menggunakan execlp untuk mengeksekusi perintah wget, dengan argumen berupa URL file yang akan diunduh (FILE_URL) dan nama file tujuan penyimpanan (FILE_NAME). Opsi -q digunakan untuk menonaktifkan output dari wget. Jika pengunduhan berhasil, maka proses anak akan mengeksekusi perintah unzip.
+
+Selanjutnya, dalam proses induk, fungsi menunggu proses anak selesai menggunakan waitpid. Jika pengunduhan berhasil (ditandai dengan status keluaran 0), maka fungsi membuat proses anak baru (pid_unzip = fork()) untuk menjalankan perintah unzip. Proses anak yang baru kemudian mengeksekusi perintah unzip untuk mengekstrak file yang telah diunduh (FILE_NAME).
+
+Setelah proses unzip selesai, proses induk menunggu proses anak selesai menggunakan waitpid. Jika ekstraksi berhasil (ditandai dengan status keluaran 0), maka proses berakhir. Jika ekstraksi gagal, maka proses akan keluar dengan status keluaran EXIT_FAILURE.
+
+Jika proses fork gagal, fungsi akan mencetak pesan kesalahan menggunakan perror dan keluar dengan status keluaran EXIT_FAILURE.
+
+```
+int main(int argc, char *argv[]) {
+    // Create daemon
+    pid_t pid, sid;
+
+    pid = fork(); // Save PID of child process
+
+    /* Exit if fork fails
+     * (pid < 0) */
+    if (pid < 0) {
+        exit(EXIT_FAILURE);
+    }
+
+    /* Exit if fork succeeds
+     * (pid is PID of child process) */
+    if (pid > 0) {
+        exit(EXIT_SUCCESS);
+    }
+
+    umask(0);
+
+    sid = setsid();
+    if (sid < 0) {
+        exit(EXIT_FAILURE);
+    }
+
+    if ((chdir("./")) < 0) {
+        exit(EXIT_FAILURE);
+    }
+
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+
+    // Set signal handler
+    signal(SIGRTMIN, signalHandler);
+    signal(SIGUSR1, signalHandler);
+    signal(SIGUSR2, signalHandler);
+
+    // Create directories if they don't exist
+    mkdir("library", 0777);
+    mkdir(BACKUP_DIR, 0777);
+
+    // Change mode if argument provided
+    if (argc == 3 && strcmp(argv[1], "-m") == 0) {
+        if (strcmp(argv[2], "backup") == 0) {
+            mode = 1;
+        } else if (strcmp(argv[2], "restore") == 0) {
+            mode = 2;
+        }
+    }
+
+    switch (mode) {
+        case 0:
+            download_and_extract_file();
+            manageFiles();
+            break;
+        case 1:
+            backupFiles();
+            break;
+        case 2:
+            restoreFiles();
+            break;
+    }
+
+    sleep(1);
+
+    exit(EXIT_SUCCESS);
+}
+
+```
+
+Fungsi main dalam program ini bertanggung jawab untuk mengatur proses utama dari daemon yang dibuat. Pertama-tama, daemon dibuat dengan melakukan fork. Proses induk akan keluar jika fork berhasil, sedangkan proses anak akan melanjutkan eksekusi.
+
+Setelah fork, daemon menetapkan umask-nya, membuat sesi baru, dan mengubah direktori kerjanya ke direktori saat ini. Kemudian, input/output standar ditutup untuk memisahkan proses dari terminal. Signal handler diatur untuk menangani sinyal SIGRTMIN, SIGUSR1, dan SIGUSR2.
+
+Selanjutnya, program membuat direktori "library" dan "backup" jika belum ada. Jika ada argumen saat menjalankan program dan argumen tersebut adalah "-m" diikuti dengan "backup" atau "restore", mode daemon akan diatur sesuai.
+
+Berdasarkan mode yang telah ditetapkan, daemon akan menjalankan salah satu dari tiga fungsi utama: download_and_extract_file untuk mengunduh dan mengekstrak file, manageFiles untuk mengelola file di direktori "library", backupFiles untuk mencadangkan file, atau restoreFiles untuk memulihkan file dari cadangan.
+
+Setelah menjalankan tugas sesuai mode, daemon akan beristirahat selama satu detik menggunakan fungsi sleep sebelum menutup proses dengan status keluaran EXIT_SUCCESS.
+
+**Sample Output**
+
+Untuk menjalankan program management.c pertama saya mengcompile program dengan command dengan
+
+gcc management.c -o management
+
+dan menjalankannya dengan command
+
+./management
+
+Kemudian program akan berjalan sebagai daemon.
+
+![Screenshot from 2024-04-23 21-56-34](https://github.com/Ax3lrod/Sisop-2-2024-MH-IT17/assets/150204139/cdc5b874-d738-4799-81d9-59ffd2e16c27)
+
+Program akan menginstall file library.zip dan meletakkan isinya ke folder library yang sudah dibuat. Kemudian program mendekripsi nama semua file yang ada
+di folder library dan merubah namanya ke nama yang sudsh di dekripsi.
+
+![Screenshot from 2024-04-23 21-55-31](https://github.com/Ax3lrod/Sisop-2-2024-MH-IT17/assets/150204139/937371ac-aa83-4375-b9e4-22dc0fa87c42)
+
+Setelah itu program akan memproses file (memindahkan, menghapus, merename) semua file di dalam folder library sesuai dengan ketentuan yang ada di soal. Keberhasilan 
+memproses file ini akan dicatat di history.log.
+
+![Screenshot from 2024-04-23 21-56-04](https://github.com/Ax3lrod/Sisop-2-2024-MH-IT17/assets/150204139/f2bdbc3e-48a9-418a-8af1-485dc489dd15)
+
+Untuk saat ini code saya masih belum bisa berjalan hingga mendekripsi nama filenya tetapi belum berhasil memproses filenya.
+
 ## NOMOR 3
 
 ## NOMOR 4
