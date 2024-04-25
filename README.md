@@ -1008,7 +1008,9 @@ void view_log(char *user) {
 }
 ````
 ### ERROR PADA NO 3
-- Log Process gagal dibuat, Sehingga tidak dapat menampilkan log dari user
+- Log Process gagal dibuat, Sehingga tidak dapat menampilkan log dari user.
+![Screenshot 2024-04-25 172322](https://github.com/Ax3lrod/Sisop-2-2024-MH-IT17/assets/151889425/822afeca-44df-4662-8a11-46cb5d7888af)
+
 
 ## NOMOR 4
 Salomo memiliki passion yang sangat dalam di bidang sistem operasi. Saat ini, dia ingin mengotomasi kegiatan-kegiatan yang ia lakukan agar dapat bekerja secara efisien. Bantulah Salomo untuk membuat program yang dapat mengotomasi kegiatan dia!
