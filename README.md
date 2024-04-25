@@ -1009,5 +1009,9 @@ Untuk menjalankan aplikasi beserta jumlah tabnya yang berada di dalam file.conf.
 Untuk mengakhiri seluruh tab aplikasi yang dijalankan _command_.
 -`./setup -k file.conf`
 Untuk mengakhiri tab aplikasi yang hanya dijalankan file.conf.
+## Output
+![Ubuntu 64-bit - VMware Workstation 25_04_2024 09_10_25](https://github.com/Ax3lrod/Sisop-2-2024-MH-IT17/assets/151877527/6687faae-a42f-46a1-a743-50819b5d7438)
+
+
 
 ## REVISI
