@@ -816,6 +816,191 @@ memproses file ini akan dicatat di history.log.
 Untuk saat ini code saya masih belum bisa berjalan hingga mendekripsi nama filenya tetapi belum berhasil memproses filenya.
 
 ## NOMOR 3
+Pak Heze adalah seorang admin yang baik. Beliau ingin membuat sebuah program admin yang dapat memantau para pengguna sistemnya. Bantulah Pak Heze untuk membuat program  tersebut!
+- Nama program tersebut dengan nama admin.c
+- Program tersebut memiliki fitur menampilkan seluruh proses yang dilakukan oleh seorang user dengan menggunakan command:
+./admin <user>
+- Program dapat memantau proses apa saja yang dilakukan oleh user. Fitur ini membuat program berjalan secara daemon dan berjalan terus menerus. Untuk menjalankan fitur ini menggunakan command: 
+./admin -m <user>
+- Dan untuk mematikan fitur tersebut menggunakan: 
+./admin -s <user>
+- Program akan mencatat seluruh proses yang dijalankan oleh user di file <user>.log dengan format:
+[dd:mm:yyyy]-[hh:mm:ss]_pid-process_nama-process_GAGAL/JALAN
+- Program dapat menggagalkan proses yang dijalankan user setiap detik secara terus menerus dengan menjalankan: 
+./admin -c user
+- sehingga user tidak bisa menjalankan proses yang dia inginkan dengan baik. Fitur ini dapat dimatikan dengan command:
+./admin -a user
+- Ketika proses yang dijalankan user digagalkan, program juga akan melog dan menset log tersebut sebagai GAGAL. Dan jika di log menggunakan fitur poin c, log akan ditulis dengan JALAN
+## Solusi
+Include Libraries: Kode dimulai dengan mengimpor beberapa pustaka yang diperlukan untuk program ini, seperti stdio.h, stdlib.h, unistd.h, dan lainnya. Ini menyediakan fungsi-fungsi yang diperlukan untuk melakukan operasi input/output, alokasi memori, operasi sistem, dan lain-lain.
+Deklarasi Fungsi: Beberapa fungsi yang akan digunakan dalam program dideklarasikan. Ini termasuk fungsi-fungsi untuk memantau proses pengguna, memulai mode daemon, menghentikan mode daemon, memblokir proses pengguna, membuka blokir proses pengguna, mencatat log proses, dan melihat log proses.
+````
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <string.h>
+#include <time.h>
+
+#define MAX_COMMAND_LENGTH 100
+
+void monitor_user_processes(char *user);
+void start_daemon_mode(char *user);
+void stop_daemon_mode(char *user);
+void block_user_processes(char *user);
+void unblock_user_processes(char *user);
+void log_process(char *user, int pid, char *process_name, int status);
+void view_log(char *user);
+
+int main(int argc, char *argv[]) {
+    if (argc < 3) {
+        printf("Usage: %s <option> <user>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    char *option = argv[1];
+    char *user = argv[2];
+
+    if (strcmp(option, "-m") == 0) {
+        start_daemon_mode(user);
+    } else if (strcmp(option, "-s") == 0) {
+        stop_daemon_mode(user);
+    } else if (strcmp(option, "-c") == 0) {
+        block_user_processes(user);
+    } else if (strcmp(option, "-a") == 0) {
+        unblock_user_processes(user);
+    } else if (strcmp(option, "-l") == 0) {
+        view_log(user);
+    } else {
+        printf("Invalid option!\n");
+        exit(EXIT_FAILURE);
+    }
+
+    return 0;
+}
+````
+
+Monitor Proses Pengguna (monitor_user_processes): Fungsi ini digunakan untuk memantau proses yang dijalankan oleh pengguna tertentu. Fungsi ini menggunakan perintah ps untuk mendapatkan daftar proses pengguna dan mencatat hasilnya dalam file log.
+````
+void monitor_user_processes(char *user) {
+    // Implementasi fitur untuk memantau proses pengguna
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("Error forking process");
+        exit(EXIT_FAILURE);
+    }
+    if (pid == 0) {
+        // Child process
+        int fd = open("/dev/null", O_WRONLY); // Mengarahkan output ke /dev/null untuk menghindari output pada terminal
+        dup2(fd, STDOUT_FILENO);
+        dup2(fd, STDERR_FILENO);
+        close(fd);
+        execlp("ps", "ps", "-u", user, NULL);
+        perror("Error executing ps");
+        exit(EXIT_FAILURE);
+    } else {
+        // Parent process
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            // Proses selesai dengan normal
+            // Tidak ada yang gagal
+            log_process(user, getpid(), "monitor_user_processes", 1);
+        } else {
+            // Proses gagal
+            log_process(user, getpid(), "monitor_user_processes", 0);
+        }
+    }
+}
+````
+Start Daemon Mode (start_daemon_mode): Fungsi ini seharusnya menjalankan mode daemon untuk memantau proses pengguna secara berkelanjutan. Namun, pada implementasi ini, fungsi hanya menampilkan pesan bahwa mode daemon dimulai.
+````
+void start_daemon_mode(char *user) {
+    // Mode daemon membutuhkan implementasi yang lebih kompleks.
+    // Di sini kita hanya menampilkan pesan bahwa mode daemon dimulai.
+    printf("Daemon mode started for user: %s\n", user);
+}
+
+````
+Stop Daemon Mode (stop_daemon_mode): Fungsi ini seharusnya menghentikan mode daemon yang sedang berjalan. Namun, pada implementasi ini, fungsi hanya menampilkan pesan bahwa mode daemon dihentikan.
+````
+void stop_daemon_mode(char *user) {
+    // Mode daemon membutuhkan implementasi yang lebih kompleks.
+    // Di sini kita hanya menampilkan pesan bahwa mode daemon dihentikan.
+    printf("Daemon mode stopped for user: %s\n", user);
+}
+````
+Block User Processes (block_user_processes): Fungsi ini seharusnya memblokir proses yang dijalankan oleh pengguna tertentu. Namun, pada implementasi ini, fungsi hanya menampilkan pesan bahwa proses pengguna diblokir.
+````
+void block_user_processes(char *user) {
+    // Implementasi fitur untuk memblokir proses pengguna.
+    // Di sini kita hanya menampilkan pesan bahwa proses pengguna diblokir.
+    printf("User processes blocked for user: %s\n", user);
+}
+````
+Unblock User Processes (unblock_user_processes): Fungsi ini seharusnya membuka blokir proses yang dijalankan oleh pengguna tertentu. Namun, pada implementasi ini, fungsi hanya menampilkan pesan bahwa blokir proses pengguna dibuka.
+````
+void unblock_user_processes(char *user) {
+    // Implementasi fitur untuk membuka blokir proses pengguna.
+    // Di sini kita hanya menampilkan pesan bahwa blokir proses pengguna dibuka.
+    printf("User processes unblocked for user: %s\n", user);
+}
+````
+Log Process (log_process): Fungsi ini digunakan untuk mencatat informasi proses ke dalam file log. Informasi yang dicatat meliputi waktu, PID proses, nama proses, dan status keberhasilan atau kegagalan proses.
+````
+void log_process(char *user, int pid, char *process_name, int status) {
+    // Implementasi fungsi untuk mencatat proses pengguna ke dalam file log
+    time_t now;
+    struct tm *tm_info;
+    time(&now);
+    tm_info = localtime(&now);
+
+    char datetime[20];
+    strftime(datetime, sizeof(datetime), "%d:%m:%Y-%H:%M:%S", tm_info);
+
+    char *process_status = (status == 0) ? "GAGAL" : "JALAN";
+
+    char filename[50];
+    sprintf(filename, "%s.log", user);
+
+    FILE *fp;
+    fp = fopen(filename, "a");
+    if (fp == NULL) {
+        perror("Error opening log file");
+        exit(EXIT_FAILURE);
+    }
+
+    fprintf(fp, "[%s]-%d-%s-%s\n", datetime, pid, process_name, process_status);
+
+    fclose(fp);
+}
+````
+View Log (view_log): Fungsi ini digunakan untuk menampilkan isi file log proses untuk pengguna tertentu.
+````
+void view_log(char *user) {
+    // Implementasi fungsi untuk melihat log proses
+    char filename[50];
+    sprintf(filename, "%s.log", user);
+
+    FILE *fp;
+    fp = fopen(filename, "r");
+    if (fp == NULL) {
+        perror("Error opening log file");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Log process for user %s:\n", user);
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        printf("%s", buffer);
+    }
+
+    fclose(fp);
+}
+````
 
 ## NOMOR 4
 Salomo memiliki passion yang sangat dalam di bidang sistem operasi. Saat ini, dia ingin mengotomasi kegiatan-kegiatan yang ia lakukan agar dapat bekerja secara efisien. Bantulah Salomo untuk membuat program yang dapat mengotomasi kegiatan dia!
