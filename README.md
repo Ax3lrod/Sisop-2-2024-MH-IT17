@@ -827,6 +827,187 @@ Contoh isi file.conf:**Firefox 2 Wireshark 3**. Ketika menjalankan command conto
 - Program juga dapat mematikan aplikasi yang dijalankan sesuai dengan file konfigurasi. Contohnya: `./setup -k file.conf`. Command ini hanya mematikan aplikasi yang dijalankan dengan `./setup -f file.conf`.
 
 ## Solusi
-### setup.c
+### Definisi Konstanta
+```
+#define PID_MAX 20
+#define ARG_SIZE 50
+```
+- Konstanta `PID_MAX` dibatasi menjadi 20 proses yang dapat dijalankan program, sedangkan `ARG_SIZE` dibatasi menjadi 50 argumen perintah.
+### Deklarasi Variabel Global beserta Fungsi
+```
+pid_t running[PID_MAX];
+int pidcount = 0;
+
+void add_global(pid_t pid);
+void kill_procs(int argc, char *argv[]);
+void open(int argc, char *argv[]);
+void open_file(int argc, char *argv[]);
+```
+- Array `running` digunakan untuk menyimpan ID akumulasi proses yang dijalankan program, dapat dilacak menggunakan `pidcount`.
+### Implementasi Fungsi `add_global`
+```
+void add_global(pid_t pid) {
+    if (pidcount < PID_MAX) {
+        running[pidcount] = pid;
+        pidcount++;
+    }
+}
+```
+- `add_global` berfungsi untuk menambahkan ID proses baru ke dalam array `running`. Jika akumulasi proses dalam array di bawah `PID_MAX`, maka ID proses akan disimpan dalam array dan `pidcount` akan ditingkatkan.
+### Implementasi Fungsi `kill_procs`
+```
+void kill_procs(int argc, char *argv[]) {
+    FILE *config = NULL;
+    if (argc == 3) {
+        config = fopen(argv[2], "r");
+        if (!config) {
+            printf("Error: Failed to open file");
+            exit(1);
+        }
+    }
+
+    char cmd[ARG_SIZE];
+    int num;
+    if (config) {
+        while (fscanf(config, "%s %d", cmd, &num) != EOF) {
+            for (int i = 0; i < num; i++) {
+                pid_t pid = fork();
+                if (pid < 0) {
+                    printf("Error: Fork failed\n");
+                    exit(1);
+                }
+                if (pid == 0) {
+                    char *args[] = {"pkill", cmd, NULL};
+                    execvp("pkill", args);
+                    _exit(1);
+                }
+                int status;
+                waitpid(pid, &status, 0);
+            }
+        }
+        fclose(config);
+    } else {
+        pid_t pid = fork();
+        if (pid < 0) {
+            printf("Error: Fork failed\n");
+            exit(1);
+        }
+        if (pid == 0) {
+            char *args[] = {"pkill", "firefox", NULL};
+            execvp("pkill", args);
+            _exit(1);
+        }
+        waitpid(pid, NULL, 0);
+
+        pid = fork();
+        if (pid < 0) {
+            printf("Error: Fork failed\n");
+            exit(1);
+        }
+        if (pid == 0) {
+            char *args[] = {"pkill", "wireshark", NULL};
+            execvp("pkill", args);
+            _exit(1);
+        }
+        waitpid(pid, NULL, 0);
+    }
+}
+```
+- `kill_procs` bertujuan untuk mengeliminasi tab aplikasi yang dijalankan program. Jika jumlah argumennya 3, maka fungsi akan membuka file.conf yang diberikan dalam `argv[2]`. Setelah itu, fungsi membaca setiap baris nama aplikasi beserta jumlah tab yang harus dieksekusi. Fungsi akan menginisiasi _child process_ dengan `fork`, setiap _child process_ menjalankan perintah `pkill` dengan argumen _command_ yang didapatkan dari file.conf menggunakan `execvp`. Lain cerita apabila argumennya bukan 3, maka fungsi akan menginisiasi dua _child process_ yang akan menjalankan `pkill firefox` dan `pkill wireshark`.
+### Implementasi Fungsi `open`
+```
+void open(int argc, char *argv[]) {
+    for (int i = 2; i < argc; i += 2) {
+        if (!isdigit(argv[i + 1][0])) {
+            printf("Error: Invalid argument(s)");
+            exit(1);
+        }
+    }
+
+    for (int i = 2; i < argc; i += 2) {
+        int num = atoi(argv[i + 1]);
+        for (int j = 0; j < num; j++) {
+            pid_t pid = fork();
+            if (pid < 0) {
+                printf("Error: Fork failed\n");
+                exit(1);
+            }
+            if (pid == 0) {
+                execlp(argv[i], argv[i], NULL);
+                _exit(1);
+            } else {
+                add_global(pid);
+            }
+        }
+    }
+}
+```
+- Esensinya adalah mengeksekusi aplikasi beserta jumlah tabnya sesuai kebutuhan, ,enjadikan `argc` dan `argv` sebagai parameternya. Argumen setelah `argv[2]` wajib berupa pasangan nama aplikasi dan jumlah tab, lalu fungsi akan memvalidasi apakah argumen untuk kuantitas tab merupakan input digit atau tidak. Jika valid, maka fungsi akan memulai seluruh eksekusinya menggunakan `fork` sesuai dengan input yang kita masukkan. Jika tidak, maka fungsi akan memperingatkan anda "Error" Invalid argument(s)". Setiap _child process_ akan menjalankan aplikasi yang dikehendaki menggunakan `execlp`.
+### Implementasi Fungsi `open_file`
+```
+void open_file(int argc, char *argv[]) {
+    FILE *config = fopen(argv[2], "r");
+    if (!config) {
+        printf("Error: Failed to open file");
+        exit(1);
+    }
+
+    char cmd[ARG_SIZE];
+    int num;
+    while (fscanf(config, "%s %d", cmd, &num) != EOF) {
+        for (int i = 0; i < num; i++) {
+            pid_t pid = fork();
+            if (pid < 0) {
+                printf("Error: Fork failed\n");
+                exit(1);
+            }
+            if (pid == 0) {
+                execlp(cmd, cmd, NULL);
+                _exit(1);
+            } else {
+                add_global(pid);
+            }
+        }
+    }
+    fclose(config);
+}
+```
+- Identik dengan fungsi `open`, namun ditujukan untuk file.conf yang diberikan dalam `argv[2]`. Jika file.conf berhasil dibuka, maka fungsi akan membaca setiap baris yang berisikan nama beserta kuantitas tabnya. Untuk setiap baris akan dieksekusi menggunakan `fork`, sementara untuk _child process_ menggunakan `execlp`.
+### Implementasi Fungsi `main`
+```
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        printf("Usage: %s [-o | -f file.conf | -k | -k file.conf]\n", argv[0]);
+        return 1;
+    }
+
+    switch (argv[1][1]) {
+        case 'o':
+            open(argc, argv);
+            break;
+        case 'f':
+            open_file(argc, argv);
+            break;
+        case 'k':
+            kill_procs(argc, argv);
+            break;
+        default:
+            printf("Invalid option\n");
+            return 1;
+    }
+
+    return 0;
+}
+```
+- Fungsi `main` dieksekusi pertama kali ketika program dijalankan. Bertujuan untuk memeriksa jumlah argumen yang diberikan dan mengeksekusi fungsi yang sesuai berdasarkan argumen pertama `argv[1]`. Jika argumen pertamanya `-o`, maka fungsi `open` dijalankan. Jika argumennya `-f`, maka fungsi `open_file` akan dipanggil. Sedangkan untuk argumen pertama `-k`, maka fungsi `kill_procs` akan dieksekusi. Ketiganya dipanggil dengan `argc` dan `argv` sebagai parameternya.
+### Penggunaan _Command_ dalam Program
+-`./setup -o <app1> <num1> <app2> <num2>...`
+Untuk membuka aplikasi beserta jumlah tabnya.
+-`./setup -f file.conf`
+Untuk menjalankan aplikasi beserta jumlah tabnya yang berada di dalam file.conf.
+-`./setup -k`
+Untuk mengakhiri seluruh tab aplikasi yang dijalankan _command_.
+-`./setup -k file.conf`
+Untuk mengakhiri tab aplikasi yang hanya dijalankan file.conf.
 
 ## REVISI
