@@ -933,6 +933,8 @@ void stop_daemon_mode(char *user) {
     printf("Daemon mode stopped for user: %s\n", user);
 }
 ````
+![Screenshot 2024-04-25 171647](https://github.com/Ax3lrod/Sisop-2-2024-MH-IT17/assets/151889425/6d64b816-533a-4374-9a34-ba3879c6ded6)
+
 Block User Processes (block_user_processes): Fungsi ini seharusnya memblokir proses yang dijalankan oleh pengguna tertentu. Namun, pada implementasi ini, fungsi hanya menampilkan pesan bahwa proses pengguna diblokir.
 ````
 void block_user_processes(char *user) {
@@ -941,6 +943,8 @@ void block_user_processes(char *user) {
     printf("User processes blocked for user: %s\n", user);
 }
 ````
+![Screenshot 2024-04-25 171539](https://github.com/Ax3lrod/Sisop-2-2024-MH-IT17/assets/151889425/bc8d5393-e30b-4810-9c42-cd29d34d2ac5)
+
 Unblock User Processes (unblock_user_processes): Fungsi ini seharusnya membuka blokir proses yang dijalankan oleh pengguna tertentu. Namun, pada implementasi ini, fungsi hanya menampilkan pesan bahwa blokir proses pengguna dibuka.
 ````
 void unblock_user_processes(char *user) {
@@ -949,6 +953,8 @@ void unblock_user_processes(char *user) {
     printf("User processes unblocked for user: %s\n", user);
 }
 ````
+![Screenshot 2024-04-25 171608](https://github.com/Ax3lrod/Sisop-2-2024-MH-IT17/assets/151889425/e40e5132-0d62-4857-926e-750622300121)
+
 Log Process (log_process): Fungsi ini digunakan untuk mencatat informasi proses ke dalam file log. Informasi yang dicatat meliputi waktu, PID proses, nama proses, dan status keberhasilan atau kegagalan proses.
 ````
 void log_process(char *user, int pid, char *process_name, int status) {
@@ -1001,6 +1007,8 @@ void view_log(char *user) {
     fclose(fp);
 }
 ````
+### ERROR PADA NO 3
+- Log Process gagal dibuat, Sehingga tidak dapat menampilkan log dari user
 
 ## NOMOR 4
 Salomo memiliki passion yang sangat dalam di bidang sistem operasi. Saat ini, dia ingin mengotomasi kegiatan-kegiatan yang ia lakukan agar dapat bekerja secara efisien. Bantulah Salomo untuk membuat program yang dapat mengotomasi kegiatan dia!
