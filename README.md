@@ -1210,3 +1210,134 @@ Untuk mengakhiri tab aplikasi yang hanya dijalankan file.conf.
 
 
 ## REVISI
+
+### Soal_2
+
+Solusi untuk gagal memproses files saya temukan dengan cara memodifikasi dan menambahkan fungsi-fungsi berikut;
+
+```
+const char *get_extension(const char *filename) {
+    const char *dot = strrchr(filename, '.');
+    if (!dot || dot == filename) return "";
+    return dot + 1;
+}
+
+void renameDecryptedFiles_by_extension(const char *dir_path, const char *filename, const char *extension) {
+    char new_name[512];
+    if (strcmp(extension, "ts") == 0) {
+        strcpy(new_name, "helper.ts");
+    } else if (strcmp(extension, "py") == 0) {
+        strcpy(new_name, "calculator.py");
+    } else if (strcmp(extension, "go") == 0) {
+        strcpy(new_name, "server.go");
+    } else {
+        strcpy(new_name, "renamed.file");
+    }
+    char old_path[512];
+    strcpy(old_path, dir_path);
+    strcat(old_path, "/");
+    strcat(old_path, filename);
+    char new_path[512];
+    strcpy(new_path, dir_path);
+    strcat(new_path, "/");
+    strcat(new_path, new_name);
+    if (rename(old_path, new_path) != 0) {
+        perror("Rename failed");
+    }
+}
+
+void renameDecryptedFiles(const char *dir_path, const char *code) {
+    DIR *d;
+    struct dirent *dir;
+
+    d = opendir(dir_path);
+    if (d) {
+        while ((dir = readdir(d)) != NULL) {
+            if (strstr(dir->d_name, code) != NULL) {
+                const char *extension = get_extension(dir->d_name);
+                renameDecryptedFiles_by_extension(dir_path, dir->d_name, extension);
+            }
+        }
+        closedir(d);
+    } else {
+        perror("Unable to open directory");
+        exit(EXIT_FAILURE);
+    }
+}
+
+
+void deletedecryptedfiles(const char *dir_path, const char *code) {
+    DIR *d;
+    struct dirent *dir;
+
+    d = opendir(dir_path);
+    if (d) {
+        while ((dir = readdir(d)) != NULL) {
+            if (strstr(dir->d_name, code) != NULL) {
+                char file_path[512];
+                strcpy(file_path, dir_path);
+                strcat(file_path, "/");
+                strcat(file_path, dir->d_name);
+                if (remove(file_path) != 0) {
+                    perror("Error deleting file");
+                }
+            }
+        }
+        closedir(d);
+    } else {
+        perror("Unable to open directory");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void manageFiles() {
+    // Change the working directory to the "library" directory
+    if (chdir("library") != 0) {
+        perror("Error changing directory to library");
+        return;
+    }
+
+    // Implement the function to decrypt and process regular files
+    DIR *dir;
+    struct dirent *entry;
+    struct stat fileStat;
+
+    dir = opendir(".");
+    if (dir == NULL) {
+        perror("Error opening directory");
+        return;
+    }
+
+    // Iterate through files in the "library" directory
+    while ((entry = readdir(dir)) != NULL) {
+        char filename[MAX_FILENAME_LEN];
+        snprintf(filename, sizeof(filename), "%s", entry->d_name);
+
+        // Skip "." and ".." entries
+        if (strcmp(filename, ".") == 0 || strcmp(filename, "..") == 0)
+            continue;
+
+        // Skip files with number 1 to 6 as the first character in their filenames
+        if (isdigit(filename[0]) && filename[0] >= '1' && filename[0] <= '6')
+            continue;
+
+        // Menggunakan lstat() untuk mendapatkan informasi tentang file
+        if (lstat(filename, &fileStat) == 0 && S_ISREG(fileStat.st_mode)) {
+            // Decrypt filename
+            decryptFileName(filename);
+            
+            // Rename and delete decrypted files if necessary
+            renameDecryptedFiles("/home/axelrod/sisop/modul2/praktikum/soal_2/library", "r3N4mE");
+            deletedecryptedfiles("/home/axelrod/sisop/modul2/praktikum/soal_2/library", "d3Let3");
+        }
+    }
+
+    closedir(dir);
+
+    // Change back to the main directory after processing files in "library"
+    if (chdir("..") != 0) {
+        perror("Error changing directory back to main directory");
+    }
+}
+```
+Untuk sementara program masih belum bisa backup.
