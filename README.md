@@ -1008,8 +1008,221 @@ void view_log(char *user) {
 }
 ````
 ### ERROR PADA NO 3
-- Log Process gagal dibuat, Sehingga tidak dapat menampilkan log dari user.
+- Log Process gagal dibuat dikarenanakan daemon tidak berjalan, Sehingga tidak dapat menampilkan log dari user.
 ![Screenshot 2024-04-25 172322](https://github.com/Ax3lrod/Sisop-2-2024-MH-IT17/assets/151889425/822afeca-44df-4662-8a11-46cb5d7888af)
+
+### REVISI NO 3
+````
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/utsname.h>
+#include <time.h>
+#include <signal.h>
+#include <stdarg.h>
+
+#define LOG_DIR "./logs"
+#define LOG_FILE_FORMAT "%s/%s.log"
+#define SLEEP_INTERVAL 1  // Seconds
+
+typedef enum {
+    MODE_LIST_PROCESSES,  // Display all processes for a user
+    MODE_MONITOR_DAEMON,  // Monitor processes in daemon mode
+    MODE_KILL_PROCESSES,  // Terminate user processes every second
+    MODE_STOP,            // Stop any active mode
+    MODE_INVALID
+} Mode;
+
+void write_log(const char *format, ...);
+void list_processes(const char *username);
+void monitor_daemon(const char *username);
+void kill_processes(const char *username);
+void handle_signal(int signal);
+
+Mode current_mode = MODE_STOP;
+
+void write_log(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+
+    time_t current_time;
+    time(&current_time);
+    struct tm *time_info = localtime(&current_time);
+
+    char log_file[1024];
+    char log_entry[1024];
+
+    snprintf(log_file, sizeof(log_file), LOG_FILE_FORMAT, LOG_DIR, getenv("USER"));
+    snprintf(log_entry, sizeof(log_entry), "[%02d:%02d:%02d]-[%04d-%02d-%02d]",
+             time_info->tm_hour, time_info->tm_min, time_info->tm_sec,
+             time_info->tm_year + 1900, time_info->tm_mon + 1, time_info->tm_mday);
+
+    vsnprintf(log_entry + strlen(log_entry), sizeof(log_entry) - strlen(log_entry), format, args);
+
+    pid_t pid = fork();
+
+    if (pid == -1) {
+        perror("fork");
+        return;
+    }
+
+    if (pid == 0) { // Child process
+        // Create log directory if it doesn't exist
+        struct stat st;
+        if (stat(LOG_DIR, &st) == -1) {
+            if (mkdir(LOG_DIR, 0755) == -1) {
+                perror("mkdir");
+                exit(EXIT_FAILURE);
+            }
+        } else if (!S_ISDIR(st.st_mode)) {
+            fprintf(stderr, "%s bukan direktori.\n", LOG_DIR);
+            exit(EXIT_FAILURE);
+        }
+
+        FILE *fp = fopen(log_file, "a");
+        if (fp) {
+            fprintf(fp, "%s\n", log_entry);
+            fclose(fp);
+            exit(EXIT_SUCCESS);
+        } else {
+            perror("fopen");
+            exit(EXIT_FAILURE);
+        }
+    } else { // Parent process
+        int status;
+        waitpid(pid, &status, 0);
+        if (!WIFEXITED(status) || WEXITSTATUS(status) != EXIT_SUCCESS) {
+            printf("Gagal menulis log.\n");
+        }
+    }
+
+    va_end(args);
+}
+
+
+void list_processes(const char *username) {
+    char command[1024];
+    snprintf(command, sizeof(command), "ps -u %d | grep %s", getuid(), username);
+
+    FILE *pipe = popen(command, "r");
+    if (!pipe) {
+        perror("popen");
+        return;
+    }
+
+    char buffer[1024];
+    printf("Daftar Proses Pengguna %s:\n", username);
+
+    while (fgets(buffer, sizeof(buffer), pipe)) {
+        printf("%s", buffer);
+    }
+
+    pclose(pipe);
+}
+
+void monitor_daemon(const char *username) {
+    signal(SIGALRM, handle_signal);
+    signal(SIGINT, handle_signal);
+
+    while (current_mode == MODE_MONITOR_DAEMON) {
+        list_processes(username);
+        write_log("Memantau proses pengguna %s", username);
+
+        sleep(SLEEP_INTERVAL);
+        alarm(SLEEP_INTERVAL);
+    }
+}
+
+void kill_processes(const char *username) {
+    pid_t pid = fork();
+
+    if (pid == -1) {
+        perror("fork");
+        return;
+    }
+
+    if (pid == 0) { // Child process
+        execlp("pkill", "pkill", "-KILL", "-u", username, NULL);
+        perror("execlp");
+        exit(EXIT_FAILURE);
+    } else { // Parent process
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+            if (WEXITSTATUS(status) == 0) {
+                write_log("Proses pengguna %s digagalkan", username);
+            } else {
+                write_log("Gagal menggagalkan proses pengguna %s", username);
+            }
+        }
+    }
+}
+
+
+void handle_signal(int signal) {
+    if (signal == SIGALRM && current_mode == MODE_KILL_PROCESSES) {
+        kill_processes(getenv("USER"));
+    } else if (signal == SIGINT) {
+        current_mode = MODE_STOP;
+    }
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 3) {
+        printf("Penggunaan: admin <username> [opsi]\n");
+        printf("Opsi:\n");
+        printf("-l: Menampilkan daftar proses pengguna\n");
+        printf("-m: Memantau proses pengguna secara daemon\n");
+        printf("-c: Menggagalkan proses pengguna setiap detik\n");
+        printf("-s: Menghentikan mode yang berjalan\n");
+        return 1;
+    }
+
+    const char *username = argv[1];
+    Mode mode = MODE_INVALID;
+
+    if (strcmp(argv[2], "-l") == 0) {
+        mode = MODE_LIST_PROCESSES;
+    } else if (strcmp(argv[2], "-m") == 0) {
+        mode = MODE_MONITOR_DAEMON;
+    } else if (strcmp(argv[2], "-c") == 0) {
+        mode = MODE_KILL_PROCESSES;
+    } else if (strcmp(argv[2], "-s") == 0) {
+        mode = MODE_STOP;
+    } else if (strcmp(argv[2], "-a") == 0) {
+        mode = MODE_STOP; // Stop any active mode
+    } else {
+        printf("Opsi tidak valid.\n");
+        return 1;
+    }
+
+    switch (mode) {
+        case MODE_LIST_PROCESSES:
+            list_processes(username);
+            break;
+        case MODE_MONITOR_DAEMON:
+            current_mode = MODE_MONITOR_DAEMON;
+            monitor_daemon(username);
+            break;
+        case MODE_KILL_PROCESSES:
+            current_mode = MODE_KILL_PROCESSES;
+            kill_processes(username);
+            break;
+        case MODE_STOP:
+            current_mode = MODE_STOP;
+            break;
+        default:
+            printf("Mode tidak valid.\n");
+            return 1;
+    }
+
+    return 0;
+}
+````
+Kode daitas sudah memperbaiki daemon sehingga dapat menampilkan seluruh user dan menjalankan command untuk membuat log process
 
 
 ## NOMOR 4
