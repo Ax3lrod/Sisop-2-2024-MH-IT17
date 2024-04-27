@@ -1222,7 +1222,7 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 ````
-Kode daitas sudah memperbaiki daemon sehingga dapat menampilkan seluruh user dan menjalankan command untuk membuat log process
+Kode diatas sudah memperbaiki daemon sehingga dapat menampilkan seluruh user dan menjalankan command untuk membuat log process
 
 
 ## NOMOR 4
